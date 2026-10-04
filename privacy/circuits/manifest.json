@@ -1,0 +1,41 @@
+{
+  "$schema": "manifest schema v1",
+  "description": "Identity + integrity of the Noir circuit and its generated EVM verifier. CI verifies on-disk hashes match this file before any deploy is permitted.",
+  "circuit": {
+    "name": "transfer",
+    "path": "privacy/circuits/transfer/src/main.nr",
+    "public_inputs_order": [
+      "input_nullifier_0",
+      "input_nullifier_1",
+      "output_commitment_0",
+      "output_commitment_1",
+      "merkle_root",
+      "public_amount",
+      "public_asset",
+      "public_recipient"
+    ],
+    "public_inputs_count": 8,
+    "n_inputs": 2,
+    "n_outputs": 2,
+    "tree_depth": 32,
+    "shape": "2-in/2-out spend"
+  },
+  "toolchain": {
+    "nargo": "1.0.0-beta.6",
+    "noirc_commit": "e796dfd67726cbc28eb9991782533b211025928d",
+    "bb": "0.82.2",
+    "proving_system": "ultra_honk"
+  },
+  "verifier": {
+    "path": "privacy/circuits/verifier/Verifier.sol",
+    "contract_name": "HonkVerifier",
+    "sha256": "79525006661af44b3f95519d444ae5a7d23f0885fc2ccbf2e6cec1f589570c53",
+    "size_bytes_source": 78179,
+    "size_bytes_runtime_estimate": 0,
+    "comment": "Run scripts/build-manifest.js to populate sha256 + sizes after generating Verifier.sol locally."
+  },
+  "circuit_artifact": {
+    "path": "privacy/circuits/transfer/target/transfer.json",
+    "comment": "Not committed (.gitignored under transfer/target/). Reproduced byte-identically from main.nr by the pinned nargo version above."
+  }
+}

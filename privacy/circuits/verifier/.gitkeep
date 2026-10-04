@@ -1,0 +1,3 @@
+# Placeholder so the directory exists in git. The actual Verifier.sol is
+# generated locally by the developer via `bb write_solidity_verifier`
+# and committed to this same path. See README.md in this directory.

@@ -1,0 +1,94 @@
+## Prover.toml.example -- sanect transfer circuit, real-proof fixture
+##
+## Scenario: shield 1 SNCT (= 10^18 wei).
+##   - No input notes (both slots empty)
+##   - 1 output note worth 1 SNCT, owned by a dummy recipient pubkey
+##   - public_amount = 1e18 (positive = shield in)
+##   - public_asset = 0 (native SNCT)
+##   - public_recipient = 0 (unused for shield)
+##
+## NOTE on TOML formatting:
+## Arrays of structs use INLINE TABLES (one struct per `{ ... }`) instead
+## of `[[input_notes]]` syntax. The double-bracket form makes nargo think
+## subsequent top-level keys belong to the last struct -- causing
+## "Expected argument input_merkle_paths but none was found" errors.
+##
+## Workflow (the output_commitment_0 below is already filled in for the
+## default note; only re-derive it if you change the output note):
+##
+##   1. cp Prover.toml.example Prover.toml
+##   2. nargo execute                                  # writes target/transfer.gz witness
+##   3. mkdir -p target/vk target/proof_dir
+##      bb write_vk \
+##           --scheme ultra_honk --oracle_hash keccak \
+##           -b target/transfer.json -o target/vk
+##      bb prove \
+##           --scheme ultra_honk --oracle_hash keccak \
+##           -b target/transfer.json -w target/transfer.gz -o target/proof_dir
+##   4. bb write_solidity_verifier -k target/vk/vk -o ../verifier/Verifier.sol
+##      (the verifier picks oracle hash from the VK -- DO NOT pass
+##       --oracle_hash to write_solidity_verifier, it errors)
+##   5. node ../../../scripts/build-manifest.js   # updates manifest sha256
+##   6. cd ../.. && forge test --match-contract RealProof
+##
+## The --oracle_hash keccak flag is CRITICAL. Without it, bb generates
+## a proof with Poseidon transcript hash, which doesn't match what the
+## on-chain Solidity verifier (always Keccak) recomputes. The
+## verifier rejects with SumcheckFailed(). With Keccak both sides
+## agree on every challenge.
+
+# === Private witness inputs ===
+
+# Two empty input notes (sentinel-zero everywhere).
+input_notes = [
+  { asset_id = "0", value = "0", owner_pk = "0", salt = "0" },
+  { asset_id = "0", value = "0", owner_pk = "0", salt = "0" },
+]
+
+input_spending_keys = ["0", "0"]
+
+input_merkle_paths = [
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+]
+
+input_path_indices = [
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+  ["0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0","0"],
+]
+
+# Output note 0: 1 SNCT to dummy recipient (owner_pk=12345, salt=67890).
+# Output note 1: empty.
+output_notes = [
+  { asset_id = "0", value = "1000000000000000000", owner_pk = "12345", salt = "67890" },
+  { asset_id = "0", value = "0", owner_pk = "0", salt = "0" },
+]
+
+# === Public inputs ===
+
+# No real inputs -> both nullifiers zero.
+input_nullifier_0 = "0"
+input_nullifier_1 = "0"
+
+# Poseidon2 hash of the output note above. Computed once via the debug
+# workflow in PR 169 (relaxed assert + println). If you change the
+# output note's fields, recompute by:
+#   1. Re-enable debug in main.nr (uncomment the println / disable assert)
+#   2. nargo execute -- prints the new hash
+#   3. Paste here and revert main.nr
+output_commitment_0 = "0x22a22e1ee3f460e1666d51645455b97498f6e9cb95fbb7bea281f9c74c28facc"
+
+# Empty output -> commitment is zero.
+output_commitment_1 = "0"
+
+# Empty tree at start.
+merkle_root = "0"
+
+# 1 SNCT (in wei) shielding in from public.
+public_amount = "1000000000000000000"
+
+# Native asset.
+public_asset = "0"
+
+# Unused for shields.
+public_recipient = "0"

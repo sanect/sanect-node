@@ -1,0 +1,5 @@
+# Noir build outputs — regenerated locally + in CI from source.
+target/
+*.proof
+*.witness
+prover.toml

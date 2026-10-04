@@ -1,0 +1,121 @@
+# One public HTTP port ($PORT, set by Railway) fronts all node services.
+#
+#   https://<domain>/         -> EVM JSON-RPC (8545)   <- use this in MetaMask
+#   https://<domain>/rpc/...  -> CometBFT RPC (26657)
+#   https://<domain>/rest/... -> Cosmos REST  (1317)
+#   wss://<domain>/ws         -> EVM WebSocket (8546)
+#
+{
+	admin off
+	auto_https off
+	# Bigger per-server timeouts so a slow eth_getBlockReceipts (cosmos/evm
+	# rebuilds every receipt from execution logs — fat blocks can take
+	# 30-90s) doesn't hit Caddy's default 30s write timeout and 502.
+	servers {
+		timeouts {
+			read_body 5m
+			read_header 30s
+			write 5m
+			idle 5m
+		}
+	}
+}
+
+:{$PORT} {
+	# CORS for browser clients (explorer, dapps). Caddy is the SOLE source of CORS
+	# headers — node-side CORS (api.enabled-unsafe-cors) is intentionally off so
+	# the response never carries two Access-Control-Allow-Origin (browsers reject
+	# duplicates). `>` defers so the header is written after upstream response.
+	header {
+		>Access-Control-Allow-Origin "*"
+		>Access-Control-Allow-Methods "GET, POST, OPTIONS"
+		>Access-Control-Allow-Headers "*"
+		>Access-Control-Max-Age "86400"
+	}
+
+	# CORS preflight must be intercepted BEFORE the reverse-proxy routes.
+	# `respond` runs after `handle`/`handle_path` in Caddy's standard
+	# directive order, so without putting this in its own `handle` block
+	# the OPTIONS would get proxied to the REST server and 502.
+	@options method OPTIONS
+	handle @options {
+		respond 204
+	}
+
+	# Drop common vulnerability-scanner probes early. Public IPv4 nodes
+	# (especially Vultr / Hetzner) get hit by zgrab + variants hammering
+	# CMS / router / SSH-on-HTTP endpoints. Without this block every
+	# probe gets proxied to the EVM JSON-RPC on 127.0.0.1:8545, which
+	# has been observed to wedge sanectd's HTTP gateway after sustained
+	# scanner load (see CLAUDE.md, Vultr "JSON-RPC dead but CometBFT
+	# fine" investigation).
+	#
+	# These paths are NEVER legitimate traffic — even a misbehaving wallet
+	# wouldn't ask for /boaform or /SDK/webLanguage. Drop them with 404
+	# straight from Caddy so the backend never sees the request.
+	# Single `path` directive — all entries are OR'd. Splitting across
+	# multiple `path` lines would AND them (impossible to match).
+	@scanner_paths path /SDK* /boaform* /login /admin /admin/* /admin.php /.env /.env.* /.git/* /.aws/* /.ssh/* /wp-* /wp-admin /wp-login.php /xmlrpc.php /phpmyadmin/* /phpinfo.php /info.php /actuator /actuator/* /manager/* /jenkins/* /api/v1/check_proxy /proxychecker /HNAP1 /favicon.ico /robots.txt /sitemap.xml /shell /cgi-bin/*
+	handle @scanner_paths {
+		respond 404
+	}
+	# Browsers + many bots crawl any naked host. Sending them straight
+	# to the EVM JSON-RPC layer with a GET / yields a 405 from sanectd
+	# (only POST is allowed), which is fine — but it's noisy in logs
+	# and a small fraction of those polls re-trigger Go's HTTP server
+	# pathologies. Respond with a tiny placeholder for GET / so the
+	# scanner stops retrying.
+	@idle_get {
+		method GET
+		path /
+	}
+	handle @idle_get {
+		respond "sanect node — POST JSON-RPC requests to / for EVM, /rpc for CometBFT, /rest for Cosmos REST. See https://sanect.com" 200
+	}
+
+	# Match both the bare path (/rpc) and any sub-path (/rpc/...). CometBFT's
+	# light client (used by state sync) POSTs JSON-RPC to the bare URL with no
+	# trailing slash; `/rpc/*` alone wouldn't match it and the request would
+	# fall through to the EVM JSON-RPC handler, which returns HTML 404 — the
+	# light client then dies on "invalid character 'p' after top-level value".
+	handle_path /rpc* {
+		reverse_proxy 127.0.0.1:26657
+	}
+
+	# Health endpoint for Railway healthcheck.
+	# A background process in the entrypoint polls CometBFT every 5s and
+	# writes one of two files into /tmp:
+	#   /tmp/healthy   when catching_up == false (node at chain tip)
+	#   /tmp/syncing   while catching_up == true (or RPC unreachable)
+	# Caddy responds 200 if /tmp/healthy exists, 503 otherwise. During
+	# a redeploy the new container starts, polls hit /tmp/syncing while
+	# block-sync runs, Railway keeps the OLD instance serving traffic.
+	# Once the new container catches up, /tmp/healthy is written and
+	# Railway swaps over with zero user-visible gap.
+	handle /health {
+		@up file {
+			root /tmp
+			try_files healthy
+		}
+		handle @up {
+			respond "ok" 200
+		}
+		respond "syncing" 503
+	}
+
+	handle_path /rest* {
+		reverse_proxy 127.0.0.1:1317
+	}
+	# EVM JSON-RPC WebSocket. Port 8546 rejects browser connections that
+	# include an Origin header (go-ethereum default). Caddy strips Origin
+	# before proxying so the upstream sees no origin and allows it.
+	handle_path /ws {
+		reverse_proxy 127.0.0.1:8546 {
+			header_up -Origin
+		}
+	}
+	# default: EVM JSON-RPC
+	handle {
+		reverse_proxy 127.0.0.1:8545
+	}
+}

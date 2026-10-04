@@ -1,0 +1,31 @@
+[profile.default]
+src = "contracts"
+out = "out"
+libs = ["lib"]
+test = "test"
+# bb 0.82.2's generated HonkVerifier requires solc ^0.8.27 in one of its
+# internal libraries. Bumped from 0.8.24 to match. Our own contracts use
+# `pragma ^0.8.24` so they still compile under 0.8.27 without issue.
+solc_version = "0.8.27"
+optimizer = true
+optimizer_runs = 200
+# Heads-up: we tried `via_ir = true` for HonkVerifier's heavy assembly,
+# but the new Yul pipeline rejects bb-generated assembly that's not
+# annotated `assembly ("memory-safe")`. The legacy optimizer handles
+# this fine. We can revisit when bb adds the memory-safe annotation
+# to its generated verifiers.
+via_ir = false
+remappings = []
+gas_reports = ["ShieldedPool"]
+
+# Permit RealProof.t.sol to read the bb-generated proof binary from
+# circuits/transfer/target/. Restricted to that subtree so a test
+# cannot read arbitrary repo files.
+fs_permissions = [
+  { access = "read", path = "circuits/transfer/target" },
+]
+
+[fmt]
+line_length = 100
+tab_width = 4
+bracket_spacing = true

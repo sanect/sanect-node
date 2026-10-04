@@ -1,0 +1,12 @@
+[package]
+name = "transfer"
+type = "bin"
+authors = ["sanect"]
+# compiler_version omitted — nargo rejects pre-release tags (1.0.0-beta.X)
+# regardless of whether they're pinned or in a range. Use whatever nargo
+# the developer has installed. The toolchain pin lives in
+# privacy/circuits/README.md instead.
+
+[dependencies]
+# Poseidon hash is in Noir's stdlib (`std::hash::poseidon::bn254`). No
+# external crate dependency needed for the v1 circuit.

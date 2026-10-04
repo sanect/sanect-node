@@ -1,0 +1,6 @@
+cache/
+out/
+broadcast/
+# Anchor at the project root so this only matches the forge-std lib dir,
+# never an arbitrary src/lib/ subfolder.
+/lib/
